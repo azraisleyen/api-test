@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "required": ["id", "name", "age"],
+  "properties": {
+    "id": { "type": "integer" },
+    "name": { "type": "string", "minLength": 1 },
+    "age": { "type": "integer", "minimum": 0, "maximum": 120 }
+  },
+  "additionalProperties": false
+}

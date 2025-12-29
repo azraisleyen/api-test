@@ -1,0 +1,4 @@
+[
+  { "case": "existing_user", "user_id": 1, "expected_name": "Alice" },
+  { "case": "missing_user", "user_id": 9999, "expected_status": 404 }
+]

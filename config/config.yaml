@@ -1,0 +1,9 @@
+base_url: "http://127.0.0.1:8000"
+timeout_seconds: 5
+response_time_threshold_ms: 500
+auth:
+  type: "none"   # none | bearer
+  token: ""
+logging:
+  level: "INFO"
+  file: "logs/test.log"
