@@ -3,6 +3,10 @@ from pydantic import BaseModel, Field
 
 app = FastAPI(title="Demo API", version="1.0")
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 class UserIn(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     age: int = Field(ge=0, le=120)

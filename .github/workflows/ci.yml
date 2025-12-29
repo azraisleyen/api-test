@@ -49,14 +49,23 @@ jobs:
       - name: Wait for API to be ready
         shell: pwsh
         run: |
-          $url = "http://127.0.0.1:8000/__reset"
+          $url = "http://127.0.0.1:8000/health"
+
           for ($i=1; $i -le 30; $i++) {
             try {
-              $resp = Invoke-WebRequest -UseBasicParsing -Method POST -Uri $url -ContentType "application/json" -Body "{}" -TimeoutSec 2
+              $resp = Invoke-WebRequest -UseBasicParsing -Method GET -Uri $url -TimeoutSec 2
               Write-Host "API is ready. StatusCode=$($resp.StatusCode)"
+              Write-Host "Body: $($resp.Content)"
               exit 0
             } catch {
+              # Exception detayını yazdır (çok kritik)
               Write-Host "Waiting for API... attempt $i"
+              Write-Host $_.Exception.Message
+              if ($_.Exception.Response) {
+                try {
+                  Write-Host "HTTP Status: $([int]$_.Exception.Response.StatusCode)"
+                } catch {}
+              }
             }
             Start-Sleep -Seconds 1
           }
@@ -68,6 +77,12 @@ jobs:
           if (Test-Path "uvicorn.err.log") { Get-Content uvicorn.err.log -Tail 200 } else { Write-Host "uvicorn.err.log not found" }
 
           throw "API did not become ready in time."
+
+      - name: Smoke reset endpoint
+        shell: pwsh
+        run: |
+          $resp = Invoke-WebRequest -UseBasicParsing -Method POST -Uri "http://127.0.0.1:8000/__reset" -ContentType "application/json" -Body "{}" -TimeoutSec 5
+          Write-Host "Reset OK. StatusCode=$($resp.StatusCode)"
 
 
       - name: Run tests + reports
