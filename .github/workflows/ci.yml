@@ -26,23 +26,25 @@ jobs:
           pip install -r requirements.txt
 
       # API'yi background'da başlat
-      - name: Start demo API (background + log)
+      - name: Start demo API (background + logs)
         shell: pwsh
         run: |
-          $log = "uvicorn.log"
-          if (Test-Path $log) { Remove-Item $log -Force }
+          $out = "uvicorn.out.log"
+          $err = "uvicorn.err.log"
+          if (Test-Path $out) { Remove-Item $out -Force }
+          if (Test-Path $err) { Remove-Item $err -Force }
 
-          # Uvicorn'u arka planda başlat, çıktıyı loga yaz
           $p = Start-Process -PassThru -NoNewWindow -FilePath python -ArgumentList @(
             "-m","uvicorn",
             "demo_api.app:app",
             "--host","127.0.0.1",
             "--port","8000",
             "--log-level","debug"
-          ) -RedirectStandardOutput $log -RedirectStandardError $log
+          ) -RedirectStandardOutput $out -RedirectStandardError $err
 
           "UVICORN_PID=$($p.Id)" | Out-File -FilePath uvicorn.pid -Encoding ascii
           Start-Sleep -Seconds 2
+
 
       - name: Wait for API to be ready
         shell: pwsh
@@ -59,9 +61,14 @@ jobs:
             Start-Sleep -Seconds 1
           }
 
-          Write-Host "========== uvicorn.log =========="
-          if (Test-Path "uvicorn.log") { Get-Content uvicorn.log -Tail 200 } else { Write-Host "uvicorn.log not found" }
+          Write-Host "========== uvicorn.out.log (tail) =========="
+          if (Test-Path "uvicorn.out.log") { Get-Content uvicorn.out.log -Tail 200 } else { Write-Host "uvicorn.out.log not found" }
+
+          Write-Host "========== uvicorn.err.log (tail) =========="
+          if (Test-Path "uvicorn.err.log") { Get-Content uvicorn.err.log -Tail 200 } else { Write-Host "uvicorn.err.log not found" }
+
           throw "API did not become ready in time."
+
 
       - name: Run tests + reports
         shell: pwsh
