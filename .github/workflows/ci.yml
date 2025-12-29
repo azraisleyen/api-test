@@ -11,7 +11,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -25,19 +25,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Start demo API
+      # API'yi background'da başlat
+      - name: Start demo API (background)
         shell: pwsh
         run: |
+          # Uvicorn'u arka planda çalıştır
           Start-Process -NoNewWindow -FilePath python -ArgumentList "-m","uvicorn","demo_api.app:app","--host","127.0.0.1","--port","8000"
-          Start-Sleep -Seconds 3
+          Start-Sleep -Seconds 2
 
-      - name: Run tests
+      # API hazır olana kadar bekle (en kritik adım)
+      - name: Wait for API to be ready
         shell: pwsh
         run: |
+          $url = "http://127.0.0.1:8000/__reset"
+          for ($i=1; $i -le 20; $i++) {
+            try {
+              $resp = Invoke-WebRequest -UseBasicParsing -Method POST -Uri $url -ContentType "application/json" -Body "{}" -TimeoutSec 2
+              if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) {
+                Write-Host "API is ready. StatusCode=$($resp.StatusCode)"
+                exit 0
+              }
+            } catch {
+              Write-Host "Waiting for API... attempt $i"
+            }
+            Start-Sleep -Seconds 1
+          }
+          throw "API did not become ready in time."
+
+      - name: Run tests + reports
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          mkdir reports -Force | Out-Null
           pytest --html=reports/report.html --self-contained-html --alluredir=reports/allure
 
-      - name: Upload HTML report
+      # Test raporlarını workflow artifact olarak sakla (Actions ekranından indirilebilir)
+      - name: Upload reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-html-report
-          path: reports/report.html
+          name: test-reports
+          path: reports
