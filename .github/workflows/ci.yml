@@ -26,30 +26,41 @@ jobs:
           pip install -r requirements.txt
 
       # API'yi background'da başlat
-      - name: Start demo API (background)
+      - name: Start demo API (background + log)
         shell: pwsh
         run: |
-          # Uvicorn'u arka planda çalıştır
-          Start-Process -NoNewWindow -FilePath python -ArgumentList "-m","uvicorn","demo_api.app:app","--host","127.0.0.1","--port","8000"
+          $log = "uvicorn.log"
+          if (Test-Path $log) { Remove-Item $log -Force }
+
+          # Uvicorn'u arka planda başlat, çıktıyı loga yaz
+          $p = Start-Process -PassThru -NoNewWindow -FilePath python -ArgumentList @(
+            "-m","uvicorn",
+            "demo_api.app:app",
+            "--host","127.0.0.1",
+            "--port","8000",
+            "--log-level","debug"
+          ) -RedirectStandardOutput $log -RedirectStandardError $log
+
+          "UVICORN_PID=$($p.Id)" | Out-File -FilePath uvicorn.pid -Encoding ascii
           Start-Sleep -Seconds 2
 
-      # API hazır olana kadar bekle (en kritik adım)
       - name: Wait for API to be ready
         shell: pwsh
         run: |
           $url = "http://127.0.0.1:8000/__reset"
-          for ($i=1; $i -le 20; $i++) {
+          for ($i=1; $i -le 30; $i++) {
             try {
               $resp = Invoke-WebRequest -UseBasicParsing -Method POST -Uri $url -ContentType "application/json" -Body "{}" -TimeoutSec 2
-              if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) {
-                Write-Host "API is ready. StatusCode=$($resp.StatusCode)"
-                exit 0
-              }
+              Write-Host "API is ready. StatusCode=$($resp.StatusCode)"
+              exit 0
             } catch {
               Write-Host "Waiting for API... attempt $i"
             }
             Start-Sleep -Seconds 1
           }
+
+          Write-Host "========== uvicorn.log =========="
+          if (Test-Path "uvicorn.log") { Get-Content uvicorn.log -Tail 200 } else { Write-Host "uvicorn.log not found" }
           throw "API did not become ready in time."
 
       - name: Run tests + reports
