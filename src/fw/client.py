@@ -7,13 +7,25 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 log = logging.getLogger("fw.client")
 
+
+@dataclass(frozen=True)
+class RequestInfo:
+    method: str
+    url: str
+    headers: Dict[str, str]
+    params: Optional[Dict[str, Any]] = None
+    json_body: Optional[Dict[str, Any]] = None
+
+
 @dataclass(frozen=True)
 class ApiResponse:
     status_code: int
     json: Any
     text: str
     elapsed_ms: int
-    headers: Dict[str, str]
+    headers: Dict[str, str]              # response headers
+    request: RequestInfo                # request kanıtı
+
 
 class ApiClient:
     def __init__(self, base_url: str, timeout_seconds: int = 5, auth_type: str = "none", token: str = ""):
@@ -39,32 +51,40 @@ class ApiClient:
         url = self._url(path)
         log.info("GET %s params=%s", url, params)
         r = self.session.get(url, params=params, headers=self.headers, timeout=self.timeout)
-        return self._wrap(r)
+        req = RequestInfo(method="GET", url=url, headers=dict(self.headers), params=params)
+        return self._wrap(r, req)
 
     def post(self, path: str, json_body: Optional[Dict[str, Any]] = None) -> ApiResponse:
         url = self._url(path)
         log.info("POST %s body=%s", url, json_body)
         r = self.session.post(url, json=json_body, headers=self.headers, timeout=self.timeout)
-        return self._wrap(r)
+        req = RequestInfo(method="POST", url=url, headers=dict(self.headers), json_body=json_body)
+        return self._wrap(r, req)
 
     def put(self, path: str, json_body: Optional[Dict[str, Any]] = None) -> ApiResponse:
         url = self._url(path)
         log.info("PUT %s body=%s", url, json_body)
         r = self.session.put(url, json=json_body, headers=self.headers, timeout=self.timeout)
-        return self._wrap(r)
+        req = RequestInfo(method="PUT", url=url, headers=dict(self.headers), json_body=json_body)
+        return self._wrap(r, req)
 
     def delete(self, path: str) -> ApiResponse:
         url = self._url(path)
         log.info("DELETE %s", url)
         r = self.session.delete(url, headers=self.headers, timeout=self.timeout)
-        return self._wrap(r)
+        req = RequestInfo(method="DELETE", url=url, headers=dict(self.headers))
+        return self._wrap(r, req)
 
-    def _wrap(self, r: requests.Response) -> ApiResponse:
+    def _wrap(self, r: requests.Response, req: RequestInfo) -> ApiResponse:
         elapsed_ms = int(r.elapsed.total_seconds() * 1000)
+
         try:
             j = r.json()
         except ValueError:
             j = None
+
+        # İstersen response özetini de logla (log dosyasının boş kalmaması için faydalı)
+        log.info("RESP %s %s status=%s elapsed_ms=%s", req.method, req.url, r.status_code, elapsed_ms)
 
         return ApiResponse(
             status_code=r.status_code,
@@ -72,4 +92,5 @@ class ApiClient:
             text=r.text,
             elapsed_ms=elapsed_ms,
             headers={k: v for k, v in r.headers.items()},
+            request=req,
         )

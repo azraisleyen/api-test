@@ -10,6 +10,7 @@ import requests
 from src.fw.config import load_config
 from src.fw.logger import setup_logger
 from src.fw.client import ApiClient
+from src.fw.allure_helpers import attach_log_file
 
 
 def _wait_until_ready(base_url: str, timeout_s: int = 40) -> None:
@@ -110,3 +111,11 @@ def reset_demo_api_state(client):
     # her testten önce DB'yi başlangıca al
     client.post("/__reset", json_body={})
     yield
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+
+    if rep.when == "call" and rep.failed:
+        attach_log_file()
